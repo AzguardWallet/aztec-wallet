@@ -87,7 +87,9 @@ When Azguard user confirms connection from a dapp (`AztecWallet.connect()`), a d
 Even though the `AztecWallet` client reconnects automatically, you might want to additionally track the connection state. You can do the following:
 
 ```js
-// connect the wallet (in most cases it's called automatically under the hood, so you don't have to call it manually)
+// connect the wallet
+// (in most cases it's called automatically under the hood,
+// so you don't have to call it manually)
 await wallet.connect();
 
 // check if the wallet is connected
