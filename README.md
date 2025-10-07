@@ -1,2 +1,110 @@
-# aztec-wallet
-Azguard Wallet client fully compatible with Aztec.js' `Wallet` interface
+# @azguardwallet/aztec-wallet
+
+[![GitHub License](https://img.shields.io/github/license/AzguardWallet/aztec-wallet)](https://github.com/AzguardWallet/aztec-wallet/blob/main/LICENSE)
+[![NPM Version](https://img.shields.io/npm/v/@azguardwallet/aztec-wallet)](https://www.npmjs.com/package/@azguardwallet/aztec-wallet)
+[![NPM Downloads](https://img.shields.io/npm/dt/@azguardwallet/aztec-wallet)](https://www.npmjs.com/package/@azguardwallet/aztec-wallet)
+
+Azguard Wallet client fully compatible with Aztec.js' `Wallet` interface, enabling seamless integration.
+
+## How to use
+
+Install the package:
+
+```shell
+npm install @azguardwallet/aztec-wallet
+```
+
+Connect the wallet:
+
+```js
+import { AztecWallet } from "@azguardwallet/aztec-wallet";
+
+// the simplest way
+const wallet = await AztecWallet.connect();
+
+// or you can additionally provide the dapp metadata and the chain
+const wallet = await AztecWallet.connect(
+    {
+        name: "My Dapp",
+        description: "The best dapp in the world",
+        logo: "...",
+        url: "..."
+    },
+    "testnet" // or "sandbox", or CAIP-string like "aztec:11155111"
+);
+```
+
+Then use this `wallet` for interaction with Aztec.js:
+
+```js
+import { AztecAddress } from '@aztec/aztec.js/addresses';
+import { SponsoredFeePaymentMethod } from '@aztec/aztec.js/fee';
+import { TokenContract } from '@aztec/noir-contracts.js/Token';
+
+const address = wallet.getAddress();
+
+const tokenAddress = AztecAddress.fromString("0x...");
+const tokenContract = await TokenContract.at(tokenAddress, wallet);
+
+// get token private balance
+
+const prvBalance = await token.methods
+    .balance_of_private(address)
+    .simulate({from: address});
+
+console.log("Private balance", prvBalance);
+
+// get token public balance
+
+const pubBalance = await token.methods
+    .balance_of_public(address)
+    .simulate({from: address});
+
+console.log("Public balance", pubBalance);
+
+// send token
+
+const feeOptions = {
+    paymentMethod: new SponsoredFeePaymentMethod(
+        AztecAddress.fromString("0x..."),
+    ),
+};
+
+const txReceipt = await token.methods
+    .transfer(AztecAddress.fromString("0x..."), 100000000n)
+    .send({from: address, fee: feeOptions})
+    .wait();
+
+console.log("Tx hash", txReceipt.txHash);
+```
+
+That's pretty much it! See more Aztec.js examples at https://docs.aztec.network.
+
+## Connection state
+
+When Azguard user confirms connection from a dapp (`AztecWallet.connect()`), a dapp session is opened, and while this session is active, the dapp is allowed to interact with the wallet. If the dapp session is expired or closed (either by the dapp or by the user), the interaction is no longer allowed.
+
+Even though the `AztecWallet` client reconnects automatically, you might want to additionally track the connection state. You can do the following:
+
+```js
+// connect the wallet (in most cases it's called automatically under the hood, so you don't have to call it manually)
+await wallet.connect();
+
+// check if the wallet is connected
+console.log(wallet.connected);
+
+// track connection/disconnection events
+wallet.onConnected.addHandler(() => console.log("Azguard connected"));
+wallet.onDisconnected.addHandler(() => console.log("Azguard disconnected"));
+
+// in the end you can disconnect and close the session
+await wallet.disconnect();
+```
+
+## Support channels
+
+If you have any questions, feel free to contact us in:
+- Telegram: https://t.me/azguardwallet
+- Twitter: https://twitter.com/AzguardWallet
+
+Cheers! 🍺

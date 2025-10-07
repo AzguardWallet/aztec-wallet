@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "target": "esnext",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+        "skipLibCheck": true,
+        "strict": true,
+        "declaration": true,
+        "rootDir": "src",
+        "outDir": "dist"
+    },
+    "include": [
+        "package.json",
+        "src/**/*"
+    ],
+}

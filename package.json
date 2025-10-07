@@ -1,0 +1,33 @@
+{
+    "name": "@azguardwallet/aztec-wallet",
+    "version": "2.0.3",
+    "description": "Azguard Wallet client fully compatible with Aztec.js' Wallet interface",
+    "author": "Azguard Wallet",
+    "homepage": "https://github.com/AzguardWallet/aztec-wallet",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/AzguardWallet/aztec-wallet.git"
+    },
+    "license": "MIT",
+    "exports": {
+        ".": {
+            "default": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "rm -rf dist && tsc"
+    },
+    "dependencies": {
+        "@azguardwallet/client": "0.5.0",
+        "@azguardwallet/types": "0.5.0",
+		"@aztec/aztec.js": "2.0.3",
+		"@aztec/entrypoints": "2.0.3",
+		"@aztec/foundation": "2.0.3",
+		"@aztec/stdlib": "2.0.3",
+		"zod": "^3.23.8"
+    }
+}
