@@ -44,7 +44,7 @@ import { TokenContract } from '@aztec/noir-contracts.js/Token';
 const address = wallet.getAddress();
 
 const tokenAddress = AztecAddress.fromString("0x...");
-const tokenContract = await TokenContract.at(tokenAddress, wallet);
+const token = await TokenContract.at(tokenAddress, wallet);
 
 // get token private balance
 
