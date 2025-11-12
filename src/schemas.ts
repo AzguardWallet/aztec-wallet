@@ -1,39 +1,45 @@
-import { AbiTypeSchema, ContractArtifactSchema, EventSelector } from "@aztec/stdlib/abi";
+import { Aliased } from "@aztec/aztec.js/wallet";
+import { ChainInfo } from "@aztec/entrypoints/interfaces";
+import { Fr } from "@aztec/foundation/fields";
+import { ZodFor } from "@aztec/foundation/schemas";
+import { AbiTypeSchema, ContractArtifactSchema, EventMetadataDefinition, EventSelector } from "@aztec/stdlib/abi";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
     ContractClassWithIdSchema,
     ContractInstanceWithAddressSchema,
-    ProtocolContractAddressesSchema,
-} from "@aztec/stdlib/contract";
-import {
     ContractClassMetadata,
     ContractMetadata,
-    EventMetadataDefinition,
-    PXEInfo,
-} from "@aztec/stdlib/interfaces/client";
-import { ZodFor } from "@aztec/foundation/schemas";
+} from "@aztec/stdlib/contract";
 import z from "zod";
 
 // copied from aztec.js, because it's not exported
 
-export const ContractClassMetadataSchema = z.object({
+export const ContractClassMetadataSchema: ZodFor<ContractClassMetadata> = z.object({
     contractClass: z.union([ContractClassWithIdSchema, z.undefined()]),
     isContractClassPubliclyRegistered: z.boolean(),
     artifact: z.union([ContractArtifactSchema, z.undefined()]),
-}) satisfies ZodFor<ContractClassMetadata>;
+});
 
-export const ContractMetadataSchema = z.object({
+export const ContractMetadataSchema: ZodFor<ContractMetadata> = z.object({
     contractInstance: z.union([ContractInstanceWithAddressSchema, z.undefined()]),
     isContractInitialized: z.boolean(),
     isContractPublished: z.boolean(),
-}) satisfies ZodFor<ContractMetadata>;
+});
 
-export const PXEInfoSchema = z.object({
-    pxeVersion: z.string(),
-    protocolContractAddresses: ProtocolContractAddressesSchema,
-}) satisfies ZodFor<PXEInfo>;
-
-export const EventMetadataDefinitionSchema = z.object({
+export const EventMetadataDefinitionSchema: ZodFor<EventMetadataDefinition> = z.object({
     eventSelector: EventSelector.schema,
     abiType: AbiTypeSchema,
     fieldNames: z.array(z.string()),
-}) satisfies ZodFor<EventMetadataDefinition>;
+});
+
+export const ChainInfoSchema: ZodFor<ChainInfo> = z.object({
+    chainId: Fr.schema,
+    version: Fr.schema,
+});
+
+export const AddressBookSchema: ZodFor<Aliased<AztecAddress>[]> = z.array(
+    z.object({
+        alias: z.string(),
+        item: AztecAddress.schema,
+    }),
+);

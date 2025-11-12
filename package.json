@@ -22,12 +22,12 @@
         "build": "rm -rf dist && tsc"
     },
     "dependencies": {
-        "@azguardwallet/client": "0.5.0",
-        "@azguardwallet/types": "0.5.0",
-		"@aztec/aztec.js": "2.0.3",
-		"@aztec/entrypoints": "2.0.3",
-		"@aztec/foundation": "2.0.3",
-		"@aztec/stdlib": "2.0.3",
-		"zod": "^3.23.8"
+        "@azguardwallet/client": "0.6.0",
+        "@azguardwallet/types": "0.6.0",
+        "@aztec/aztec.js": "3.0.0-devnet.5",
+        "@aztec/entrypoints": "3.0.0-devnet.5",
+        "@aztec/foundation": "3.0.0-devnet.5",
+        "@aztec/stdlib": "3.0.0-devnet.5",
+        "zod": "^3.23.8"
     }
 }
