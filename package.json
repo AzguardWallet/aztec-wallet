@@ -1,6 +1,6 @@
 {
     "name": "@azguardwallet/aztec-wallet",
-    "version": "2.0.3",
+    "version": "3.0.0-devnet.5",
     "description": "Azguard Wallet client fully compatible with Aztec.js' Wallet interface",
     "author": "Azguard Wallet",
     "homepage": "https://github.com/AzguardWallet/aztec-wallet",
