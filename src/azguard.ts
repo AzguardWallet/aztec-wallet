@@ -47,7 +47,7 @@ export class AztecWallet implements Wallet {
     /**
      * Creates `AztecWallet` instance, connected to Azguard Wallet
      * @param dapp Dapp metadata (default: { name: window.location.hostname })
-     * @param chain Chain (default: "testnet")
+     * @param chain Chain (default: "devnet")
      * @param timeout Timeout in ms for the `window.azguard` object lookup (default: 1000ms)
      * @returns AztecWallet instance
      */

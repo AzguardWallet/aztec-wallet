@@ -30,7 +30,7 @@ const wallet = await AztecWallet.connect(
         logo: "...",
         url: "..."
     },
-    "testnet" // or "sandbox", or CAIP-string like "aztec:11155111"
+    "devnet" // or "sandbox", or CAIP-string like "aztec:1674512022"
 );
 ```
 
@@ -41,14 +41,15 @@ import { AztecAddress } from '@aztec/aztec.js/addresses';
 import { SponsoredFeePaymentMethod } from '@aztec/aztec.js/fee';
 import { TokenContract } from '@aztec/noir-contracts.js/Token';
 
-const address = wallet.getAddress();
+const accounts = await wallet.getAccounts();
+const address = accounts[0].item;
 
 const tokenAddress = AztecAddress.fromString("0x...");
 const tokenContract = await TokenContract.at(tokenAddress, wallet);
 
 // get token private balance
 
-const prvBalance = await token.methods
+const prvBalance = await tokenContract.methods
     .balance_of_private(address)
     .simulate({from: address});
 
@@ -56,7 +57,7 @@ console.log("Private balance", prvBalance);
 
 // get token public balance
 
-const pubBalance = await token.methods
+const pubBalance = await tokenContract.methods
     .balance_of_public(address)
     .simulate({from: address});
 
@@ -70,7 +71,7 @@ const feeOptions = {
     ),
 };
 
-const txReceipt = await token.methods
+const txReceipt = await tokenContract.methods
     .transfer(AztecAddress.fromString("0x..."), 100000000n)
     .send({from: address, fee: feeOptions})
     .wait();
