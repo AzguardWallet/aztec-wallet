@@ -89,8 +89,8 @@ Even though the `AztecWallet` client reconnects automatically, you might want to
 
 ```js
 // connect the wallet
-// (in most cases it's called automatically under the hood,
-// so you don't have to call it manually)
+// (it's lazily called under the hood, so you don't have to call it manually,
+// unless you want to connect immediately)
 await wallet.connect();
 
 // check if the wallet is connected
