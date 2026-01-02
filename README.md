@@ -30,7 +30,7 @@ const wallet = await AztecWallet.connect(
         logo: "...",
         url: "..."
     },
-    "devnet" // or "sandbox", or CAIP-string like "aztec:1674512022"
+    "devnet" // or "sandbox", or CAIP-string like "aztec:1654394782"
 );
 ```
 
@@ -39,13 +39,20 @@ Then use this `wallet` for interaction with Aztec.js:
 ```js
 import { AztecAddress } from '@aztec/aztec.js/addresses';
 import { SponsoredFeePaymentMethod } from '@aztec/aztec.js/fee';
-import { TokenContract } from '@aztec/noir-contracts.js/Token';
+import { createAztecNodeClient } from '@aztec/aztec.js/node';
+import { TokenContract, TokenContractArtifact } from '@aztec/noir-contracts.js/Token';
 
 const accounts = await wallet.getAccounts();
 const address = accounts[0].item;
 
 const tokenAddress = AztecAddress.fromString("0x...");
 const tokenContract = await TokenContract.at(tokenAddress, wallet);
+
+// register token contract in user's PXE
+
+const node = createAztecNodeClient("https://next.devnet.aztec-labs.com");
+const tokenInstance = await node.getContract(tokenAddress);
+await wallet.registerContract(tokenInstance, TokenContractArtifact);
 
 // get token private balance
 
