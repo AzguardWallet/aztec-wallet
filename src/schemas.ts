@@ -1,6 +1,4 @@
 import { Aliased } from "@aztec/aztec.js/wallet";
-import { ChainInfo } from "@aztec/entrypoints/interfaces";
-import { Fr } from "@aztec/foundation/fields";
 import { ZodFor } from "@aztec/foundation/schemas";
 import { AbiTypeSchema, ContractArtifactSchema, EventMetadataDefinition, EventSelector } from "@aztec/stdlib/abi";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
@@ -32,10 +30,6 @@ export const EventMetadataDefinitionSchema: ZodFor<EventMetadataDefinition> = z.
     fieldNames: z.array(z.string()),
 });
 
-export const ChainInfoSchema: ZodFor<ChainInfo> = z.object({
-    chainId: Fr.schema,
-    version: Fr.schema,
-});
 
 export const AddressBookSchema: ZodFor<Aliased<AztecAddress>[]> = z.array(
     z.object({

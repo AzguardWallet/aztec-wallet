@@ -3,6 +3,7 @@ import {
     AztecRegisterContractOperation,
     AztecRegisterSenderOperation,
     AztecSendTxOperation,
+    AztecSimulateTxOperation,
     AztecSimulateUtilityOperation,
     CaipAccount,
     CaipChain,
@@ -17,29 +18,29 @@ import {
     BatchableMethods,
     BatchedMethod,
     BatchResults,
-    ContractInstanceAndArtifact,
+    PrivateEvent,
+    PrivateEventFilter,
     ProfileOptions,
     SendOptions,
     SimulateOptions,
     Wallet,
 } from "@aztec/aztec.js/wallet";
 import { ChainInfo } from "@aztec/entrypoints/interfaces";
-import { ExecutionPayload } from "@aztec/entrypoints/payload";
-import { Fr } from "@aztec/foundation/fields";
+import { Fr } from "@aztec/foundation/curves/bn254";
 import { ZodFor } from "@aztec/foundation/schemas";
-import { ContractArtifact, EventMetadataDefinition } from "@aztec/stdlib/abi";
+import { ContractArtifact, EventMetadataDefinition, FunctionCall } from "@aztec/stdlib/abi";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { AuthWitness } from "@aztec/stdlib/auth-witness";
 import {
     ContractClassMetadata,
     ContractInstanceWithAddress,
     ContractInstanceWithAddressSchema,
-    ContractInstantiationData,
     ContractMetadata,
 } from "@aztec/stdlib/contract";
-import { TxSimulationResult, UtilitySimulationResult, TxHash, TxReceipt, TxProfileResult } from "@aztec/stdlib/tx";
+import { ExecutionPayload, TxSimulationResult, UtilitySimulationResult, TxHash, TxReceipt, TxProfileResult } from "@aztec/stdlib/tx";
 import z from "zod";
-import { AddressBookSchema, ChainInfoSchema, ContractClassMetadataSchema, ContractMetadataSchema } from "./schemas";
+import { ChainInfoSchema } from "@aztec/entrypoints/interfaces";
+import { AddressBookSchema, ContractClassMetadataSchema, ContractMetadataSchema } from "./schemas";
 import { aztecMethods } from "./methods";
 
 /** Azguard Wallet client fully compatible with Aztec.js' `Wallet` interface */
@@ -57,7 +58,7 @@ export class AztecWallet implements Wallet {
         }
 
         if (!chain || chain === "devnet") {
-            chain = "aztec:1674512022";
+            chain = "aztec:1654394782";
         } else if (chain === "sandbox") {
             chain = "aztec:0";
         }
@@ -167,20 +168,14 @@ export class AztecWallet implements Wallet {
     }
 
     public async getPrivateEvents<T>(
-        contractAddress: AztecAddress,
         eventMetadata: EventMetadataDefinition,
-        from: number,
-        numBlocks: number,
-        recipients: AztecAddress[],
-    ): Promise<T[]> {
+        eventFilter: PrivateEventFilter,
+    ): Promise<PrivateEvent<T>[]> {
         return await this.#execute(z.any(), {
             kind: "aztec_getPrivateEvents",
             chain: this.#chain,
-            contractAddress,
             eventMetadata,
-            from,
-            numBlocks,
-            recipients,
+            eventFilter,
         });
     }
 
@@ -224,18 +219,14 @@ export class AztecWallet implements Wallet {
     }
 
     public async registerContract(
-        instanceData:
-            | AztecAddress
-            | ContractInstanceWithAddress
-            | ContractInstantiationData
-            | ContractInstanceAndArtifact,
+        instance: ContractInstanceWithAddress,
         artifact?: ContractArtifact,
         secretKey?: Fr,
     ): Promise<ContractInstanceWithAddress> {
         return await this.#execute(ContractInstanceWithAddressSchema, {
             kind: "aztec_registerContract",
             chain: this.#chain,
-            instanceData,
+            instance,
             artifact,
             secretKey,
         });
@@ -256,17 +247,13 @@ export class AztecWallet implements Wallet {
     }
 
     public async simulateUtility(
-        functionName: string,
-        args: any[],
-        to: AztecAddress,
+        call: FunctionCall,
         authwits?: AuthWitness[],
     ): Promise<UtilitySimulationResult> {
         return await this.#execute(UtilitySimulationResult.schema, {
             kind: "aztec_simulateUtility",
             account: await this.#account(),
-            functionName,
-            args,
-            to,
+            call,
             authwits,
         });
     }
@@ -301,7 +288,7 @@ export class AztecWallet implements Wallet {
 
     public async createAuthWit(
         from: AztecAddress,
-        messageHashOrIntent: Fr | Buffer<ArrayBuffer> | IntentInnerHash | CallIntent,
+        messageHashOrIntent: Fr | IntentInnerHash | CallIntent,
     ): Promise<AuthWitness> {
         await this.#ensureConnected();
         const account = this.#azguard.accounts.find((x) => x.endsWith(from?.toString()));
@@ -324,30 +311,30 @@ export class AztecWallet implements Wallet {
         for (const method of methods) {
             switch (method.name) {
                 case "registerContract": {
-                    const [instanceData, artifact, secretKey] = method.args;
+                    const [instance, artifact, secretKey] = method.args as Parameters<BatchableMethods["registerContract"]>;
                     operations.push({
                         kind: "aztec_registerContract",
                         chain: this.#chain,
-                        instanceData,
+                        instance,
                         artifact,
                         secretKey,
                     } satisfies AztecRegisterContractOperation);
                     break;
                 }
                 case "registerSender": {
-                    const [address, alias] = method.args;
+                    const [address, alias] = method.args as Parameters<BatchableMethods["registerSender"]>;
                     operations.push({
                         kind: "aztec_registerSender",
                         chain: this.#chain,
                         address,
-                        alias: alias as string | undefined,
+                        alias,
                     } satisfies AztecRegisterSenderOperation);
                     break;
                 }
                 case "sendTx": {
-                    const [exec, opts] = method.args;
+                    const [exec, opts] = method.args as Parameters<BatchableMethods["sendTx"]>;
                     const account = this.#azguard.accounts.find((x) =>
-                        x.endsWith((opts as SendOptions)?.from?.toString()),
+                        x.endsWith(opts?.from?.toString()),
                     );
                     if (!account) {
                         throw new Error("Unauthorized 'from' account");
@@ -360,14 +347,28 @@ export class AztecWallet implements Wallet {
                     } satisfies AztecSendTxOperation);
                     break;
                 }
+                case "simulateTx": {
+                    const [exec, opts] = method.args as Parameters<BatchableMethods["simulateTx"]>;
+                    const account = this.#azguard.accounts.find((x) =>
+                        x.endsWith(opts?.from?.toString()),
+                    );
+                    if (!account) {
+                        throw new Error("Unauthorized 'from' account");
+                    }
+                    operations.push({
+                        kind: "aztec_simulateTx",
+                        account,
+                        exec,
+                        opts,
+                    } satisfies AztecSimulateTxOperation);
+                    break;
+                }
                 case "simulateUtility": {
-                    const [functionName, args, to, authwits] = method.args;
+                    const [call, authwits] = method.args as Parameters<BatchableMethods["simulateUtility"]>;
                     operations.push({
                         kind: "aztec_simulateUtility",
                         account: await this.#account(),
-                        functionName: functionName as string,
-                        args: args as any[],
-                        to,
+                        call,
                         authwits,
                     } satisfies AztecSimulateUtilityOperation);
                     break;
@@ -409,6 +410,13 @@ export class AztecWallet implements Wallet {
                     output.push({
                         method,
                         result: await TxHash.schema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "simulateTx": {
+                    output.push({
+                        method,
+                        result: await TxSimulationResult.schema.parseAsync(result.result),
                     });
                     break;
                 }
