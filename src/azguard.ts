@@ -15,16 +15,25 @@ import {
 import { CallIntent, IntentInnerHash } from "@aztec/aztec.js/authorization";
 import {
     Aliased,
+    AppCapabilities,
     BatchableMethods,
     BatchedMethod,
     BatchResults,
+    ContractClassMetadata,
+    ContractMetadata,
     PrivateEvent,
     PrivateEventFilter,
     ProfileOptions,
     SendOptions,
     SimulateOptions,
+    SimulateUtilityOptions,
+    WalletCapabilities,
     Wallet,
 } from "@aztec/aztec.js/wallet";
+import {
+    type InteractionWaitOptions,
+    type SendReturn,
+} from "@aztec/aztec.js/contracts";
 import { ChainInfo } from "@aztec/entrypoints/interfaces";
 import { Fr } from "@aztec/foundation/curves/bn254";
 import { ZodFor } from "@aztec/foundation/schemas";
@@ -32,15 +41,14 @@ import { ContractArtifact, EventMetadataDefinition, FunctionCall } from "@aztec/
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { AuthWitness } from "@aztec/stdlib/auth-witness";
 import {
-    ContractClassMetadata,
     ContractInstanceWithAddress,
     ContractInstanceWithAddressSchema,
-    ContractMetadata,
 } from "@aztec/stdlib/contract";
 import { ExecutionPayload, TxSimulationResult, UtilitySimulationResult, TxHash, TxReceipt, TxProfileResult } from "@aztec/stdlib/tx";
 import z from "zod";
 import { ChainInfoSchema } from "@aztec/entrypoints/interfaces";
-import { AddressBookSchema, ContractClassMetadataSchema, ContractMetadataSchema } from "./schemas";
+import { ContractClassMetadataSchema, ContractMetadataSchema } from "@aztec/aztec.js/wallet";
+import { AddressBookSchema } from "./schemas";
 import { aztecMethods } from "./methods";
 
 /** Azguard Wallet client fully compatible with Aztec.js' `Wallet` interface */
@@ -58,7 +66,7 @@ export class AztecWallet implements Wallet {
         }
 
         if (!chain || chain === "devnet") {
-            chain = "aztec:1654394782";
+            chain = "aztec:604129785";
         } else if (chain === "sandbox") {
             chain = "aztec:0";
         }
@@ -150,12 +158,11 @@ export class AztecWallet implements Wallet {
         return await schema.parseAsync(result.result);
     }
 
-    public async getContractClassMetadata(id: Fr, includeArtifact?: boolean): Promise<ContractClassMetadata> {
+    public async getContractClassMetadata(id: Fr): Promise<ContractClassMetadata> {
         return await this.#execute(ContractClassMetadataSchema, {
             kind: "aztec_getContractClassMetadata",
             chain: this.#chain,
             id,
-            includeArtifact,
         });
     }
 
@@ -183,14 +190,6 @@ export class AztecWallet implements Wallet {
         return await this.#execute(ChainInfoSchema, {
             kind: "aztec_getChainInfo",
             chain: this.#chain,
-        });
-    }
-
-    public async getTxReceipt(txHash: TxHash): Promise<TxReceipt> {
-        return await this.#execute(TxReceipt.schema, {
-            kind: "aztec_getTxReceipt",
-            chain: this.#chain,
-            txHash,
         });
     }
 
@@ -248,13 +247,13 @@ export class AztecWallet implements Wallet {
 
     public async simulateUtility(
         call: FunctionCall,
-        authwits?: AuthWitness[],
+        opts: SimulateUtilityOptions,
     ): Promise<UtilitySimulationResult> {
         return await this.#execute(UtilitySimulationResult.schema, {
             kind: "aztec_simulateUtility",
             account: await this.#account(),
             call,
-            authwits,
+            opts,
         });
     }
 
@@ -272,23 +271,27 @@ export class AztecWallet implements Wallet {
         });
     }
 
-    public async sendTx(exec: ExecutionPayload, opts: SendOptions): Promise<TxHash> {
+    public async sendTx<W extends InteractionWaitOptions = undefined>(
+        exec: ExecutionPayload,
+        opts: SendOptions<W>,
+    ): Promise<SendReturn<W>> {
         await this.#ensureConnected();
         const account = this.#azguard.accounts.find((x) => x.endsWith(opts?.from?.toString()));
         if (!account) {
             throw new Error("Unauthorized 'from' account");
         }
-        return await this.#execute(TxHash.schema, {
+        const schema = z.union([TxHash.schema, TxReceipt.schema]);
+        return await this.#execute(schema, {
             kind: "aztec_sendTx",
             account,
             exec,
             opts,
-        });
+        }) as SendReturn<W>;
     }
 
     public async createAuthWit(
         from: AztecAddress,
-        messageHashOrIntent: Fr | IntentInnerHash | CallIntent,
+        messageHashOrIntent: IntentInnerHash | CallIntent,
     ): Promise<AuthWitness> {
         await this.#ensureConnected();
         const account = this.#azguard.accounts.find((x) => x.endsWith(from?.toString()));
@@ -302,7 +305,12 @@ export class AztecWallet implements Wallet {
         });
     }
 
-    public async batch<const T extends readonly BatchedMethod<keyof BatchableMethods>[]>(
+    public async requestCapabilities(manifest: AppCapabilities): Promise<WalletCapabilities> {
+        // TODO: implement capability negotiation based on manifest
+        return {} as WalletCapabilities;
+    }
+
+    public async batch<const T extends readonly BatchedMethod[]>(
         methods: T,
     ): Promise<BatchResults<T>> {
         await this.#ensureConnected();
@@ -364,12 +372,12 @@ export class AztecWallet implements Wallet {
                     break;
                 }
                 case "simulateUtility": {
-                    const [call, authwits] = method.args as Parameters<BatchableMethods["simulateUtility"]>;
+                    const [call, opts] = method.args as Parameters<BatchableMethods["simulateUtility"]>;
                     operations.push({
                         kind: "aztec_simulateUtility",
                         account: await this.#account(),
                         call,
-                        authwits,
+                        opts,
                     } satisfies AztecSimulateUtilityOperation);
                     break;
                 }
@@ -409,7 +417,7 @@ export class AztecWallet implements Wallet {
                 case "sendTx": {
                     output.push({
                         method,
-                        result: await TxHash.schema.parseAsync(result.result),
+                        result: await z.union([TxHash.schema, TxReceipt.schema]).parseAsync(result.result),
                     });
                     break;
                 }

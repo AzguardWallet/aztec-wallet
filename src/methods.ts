@@ -5,7 +5,6 @@ export const aztecMethods: OperationKind[] = [
     "aztec_getContractMetadata",
     "aztec_getPrivateEvents",
     "aztec_getChainInfo",
-    "aztec_getTxReceipt",
     "aztec_registerSender",
     "aztec_getAddressBook",
     "aztec_registerContract",
