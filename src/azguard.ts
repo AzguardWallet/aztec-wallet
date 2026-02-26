@@ -1,5 +1,13 @@
 import { AzguardClient } from "@azguardwallet/client";
 import {
+    AztecCreateAuthWitOperation,
+    AztecGetAccountsOperation,
+    AztecGetAddressBookOperation,
+    AztecGetChainInfoOperation,
+    AztecGetContractClassMetadataOperation,
+    AztecGetContractMetadataOperation,
+    AztecGetPrivateEventsOperation,
+    AztecProfileTxOperation,
     AztecRegisterContractOperation,
     AztecRegisterSenderOperation,
     AztecSendTxOperation,
@@ -210,11 +218,10 @@ export class AztecWallet implements Wallet {
     }
 
     public async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-        await this.#ensureConnected();
-        return this.#azguard.accounts.map((x, i) => ({
-            alias: `Account ${i + 1}`,
-            item: AztecAddress.fromString(x.split(":").at(-1)!),
-        }));
+        return await this.#execute(AddressBookSchema, {
+            kind: "aztec_getAccounts",
+            chain: this.#chain,
+        });
     }
 
     public async registerContract(
@@ -381,6 +388,87 @@ export class AztecWallet implements Wallet {
                     } satisfies AztecSimulateUtilityOperation);
                     break;
                 }
+                case "getChainInfo": {
+                    operations.push({
+                        kind: "aztec_getChainInfo",
+                        chain: this.#chain,
+                    } satisfies AztecGetChainInfoOperation);
+                    break;
+                }
+                case "getContractMetadata": {
+                    const [address] = method.args as Parameters<BatchableMethods["getContractMetadata"]>;
+                    operations.push({
+                        kind: "aztec_getContractMetadata",
+                        chain: this.#chain,
+                        address,
+                    } satisfies AztecGetContractMetadataOperation);
+                    break;
+                }
+                case "getContractClassMetadata": {
+                    const [id] = method.args as Parameters<BatchableMethods["getContractClassMetadata"]>;
+                    operations.push({
+                        kind: "aztec_getContractClassMetadata",
+                        chain: this.#chain,
+                        id,
+                    } satisfies AztecGetContractClassMetadataOperation);
+                    break;
+                }
+                case "getAddressBook": {
+                    operations.push({
+                        kind: "aztec_getAddressBook",
+                        chain: this.#chain,
+                    } satisfies AztecGetAddressBookOperation);
+                    break;
+                }
+                case "getAccounts": {
+                    operations.push({
+                        kind: "aztec_getAccounts",
+                        chain: this.#chain,
+                    } satisfies AztecGetAccountsOperation);
+                    break;
+                }
+                case "getPrivateEvents": {
+                    const [eventMetadata, eventFilter] = method.args as Parameters<BatchableMethods["getPrivateEvents"]>;
+                    operations.push({
+                        kind: "aztec_getPrivateEvents",
+                        chain: this.#chain,
+                        eventMetadata,
+                        eventFilter,
+                    } satisfies AztecGetPrivateEventsOperation);
+                    break;
+                }
+                case "profileTx": {
+                    const [exec, opts] = method.args as Parameters<BatchableMethods["profileTx"]>;
+                    const account = this.#azguard.accounts.find((x) =>
+                        x.endsWith(opts?.from?.toString()),
+                    );
+                    if (!account) {
+                        throw new Error("Unauthorized 'from' account");
+                    }
+                    operations.push({
+                        kind: "aztec_profileTx",
+                        account,
+                        exec,
+                        opts,
+                    } satisfies AztecProfileTxOperation);
+                    break;
+                }
+                case "createAuthWit": {
+                    const [from, messageHashOrIntent] = method.args as Parameters<BatchableMethods["createAuthWit"]>;
+                    const account = this.#azguard.accounts.find((x) =>
+                        x.endsWith(from?.toString()),
+                    );
+                    if (!account) {
+                        throw new Error("Unauthorized 'from' account");
+                    }
+                    operations.push({
+                        kind: "aztec_createAuthWit",
+                        account,
+                        messageHashOrIntent,
+                    } satisfies AztecCreateAuthWitOperation);
+                    break;
+                }
+                case "requestCapabilities":
                 default: {
                     throw new Error("Unsupported batch method");
                 }
@@ -402,39 +490,96 @@ export class AztecWallet implements Wallet {
             switch (method) {
                 case "registerContract": {
                     output.push({
-                        method,
+                        name: method,
                         result: await ContractInstanceWithAddressSchema.parseAsync(result.result),
                     });
                     break;
                 }
                 case "registerSender": {
                     output.push({
-                        method,
+                        name: method,
                         result: await AztecAddress.schema.parseAsync(result.result),
                     });
                     break;
                 }
                 case "sendTx": {
                     output.push({
-                        method,
+                        name: method,
                         result: await z.union([TxHash.schema, TxReceipt.schema]).parseAsync(result.result),
                     });
                     break;
                 }
                 case "simulateTx": {
                     output.push({
-                        method,
+                        name: method,
                         result: await TxSimulationResult.schema.parseAsync(result.result),
                     });
                     break;
                 }
                 case "simulateUtility": {
                     output.push({
-                        method,
+                        name: method,
                         result: await UtilitySimulationResult.schema.parseAsync(result.result),
                     });
                     break;
                 }
+                case "getChainInfo": {
+                    output.push({
+                        name: method,
+                        result: await ChainInfoSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getContractMetadata": {
+                    output.push({
+                        name: method,
+                        result: await ContractMetadataSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getContractClassMetadata": {
+                    output.push({
+                        name: method,
+                        result: await ContractClassMetadataSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getAddressBook": {
+                    output.push({
+                        name: method,
+                        result: await AddressBookSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getAccounts": {
+                    output.push({
+                        name: method,
+                        result: await AddressBookSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getPrivateEvents": {
+                    output.push({
+                        name: method,
+                        result: await z.any().parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "profileTx": {
+                    output.push({
+                        name: method,
+                        result: await TxProfileResult.schema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "createAuthWit": {
+                    output.push({
+                        name: method,
+                        result: await AuthWitness.schema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "requestCapabilities":
                 default: {
                     throw new Error("Unsupported batch method");
                 }
