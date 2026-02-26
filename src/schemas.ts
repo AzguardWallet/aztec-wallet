@@ -17,3 +17,10 @@ export const AddressBookSchema: ZodFor<Aliased<AztecAddress>[]> = z.array(
         item: AztecAddress.schema,
     }),
 );
+
+export const AccountsSchema: ZodFor<Aliased<AztecAddress>[]> = z.array(
+    z.object({
+        alias: z.string(),
+        item: AztecAddress.schema,
+    }),
+);

@@ -56,7 +56,7 @@ import { ExecutionPayload, TxSimulationResult, UtilitySimulationResult, TxHash, 
 import z from "zod";
 import { ChainInfoSchema } from "@aztec/entrypoints/interfaces";
 import { ContractClassMetadataSchema, ContractMetadataSchema } from "@aztec/aztec.js/wallet";
-import { AddressBookSchema } from "./schemas";
+import { AccountsSchema, AddressBookSchema } from "./schemas";
 import { aztecMethods } from "./methods";
 
 /** Azguard Wallet client fully compatible with Aztec.js' `Wallet` interface */
@@ -218,7 +218,7 @@ export class AztecWallet implements Wallet {
     }
 
     public async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-        return await this.#execute(AddressBookSchema, {
+        return await this.#execute(AccountsSchema, {
             kind: "aztec_getAccounts",
             chain: this.#chain,
         });
@@ -554,7 +554,7 @@ export class AztecWallet implements Wallet {
                 case "getAccounts": {
                     output.push({
                         name: method,
-                        result: await AddressBookSchema.parseAsync(result.result),
+                        result: await AccountsSchema.parseAsync(result.result),
                     });
                     break;
                 }
