@@ -149,11 +149,6 @@ export class AztecWallet implements Wallet {
         }
     }
 
-    async #account(): Promise<CaipAccount> {
-        await this.#ensureConnected();
-        return this.#azguard.accounts[0];
-    }
-
     async #execute<T>(schema: ZodFor<T>, operation: Operation): Promise<T> {
         await this.#ensureConnected();
         const [result] = await this.#azguard.execute([operation]);
@@ -256,9 +251,14 @@ export class AztecWallet implements Wallet {
         call: FunctionCall,
         opts: SimulateUtilityOptions,
     ): Promise<UtilitySimulationResult> {
+        await this.#ensureConnected();
+        const account = this.#azguard.accounts.find((x) => x.endsWith(opts?.scope?.toString()));
+        if (!account) {
+            throw new Error("Unauthorized 'scope' account");
+        }
         return await this.#execute(UtilitySimulationResult.schema, {
             kind: "aztec_simulateUtility",
-            account: await this.#account(),
+            account,
             call,
             opts,
         });
@@ -380,9 +380,13 @@ export class AztecWallet implements Wallet {
                 }
                 case "simulateUtility": {
                     const [call, opts] = method.args as Parameters<BatchableMethods["simulateUtility"]>;
+                    const account = this.#azguard.accounts.find((x) => x.endsWith(opts?.scope?.toString()));
+                    if (!account) {
+                        throw new Error("Unauthorized 'scope' account");
+                    }
                     operations.push({
                         kind: "aztec_simulateUtility",
-                        account: await this.#account(),
+                        account,
                         call,
                         opts,
                     } satisfies AztecSimulateUtilityOperation);
