@@ -30,7 +30,7 @@ const wallet = await AztecWallet.connect(
         logo: "...",
         url: "..."
     },
-    "devnet" // or "sandbox", or CAIP-string like "aztec:1654394782"
+    "devnet" // or "sandbox", or CAIP-string like "aztec:604129785"
 );
 ```
 
@@ -46,7 +46,7 @@ const accounts = await wallet.getAccounts();
 const address = accounts[0].item;
 
 const tokenAddress = AztecAddress.fromString("0x...");
-const tokenContract = await TokenContract.at(tokenAddress, wallet);
+const tokenContract = TokenContract.at(tokenAddress, wallet);
 
 // register token contract in user's PXE
 
@@ -80,8 +80,7 @@ const feeOptions = {
 
 const txReceipt = await tokenContract.methods
     .transfer(AztecAddress.fromString("0x..."), 100000000n)
-    .send({from: address, fee: feeOptions})
-    .wait();
+    .send({from: address, fee: feeOptions});
 
 console.log("Tx hash", txReceipt.txHash);
 ```

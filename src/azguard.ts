@@ -1,5 +1,13 @@
 import { AzguardClient } from "@azguardwallet/client";
 import {
+    AztecCreateAuthWitOperation,
+    AztecGetAccountsOperation,
+    AztecGetAddressBookOperation,
+    AztecGetChainInfoOperation,
+    AztecGetContractClassMetadataOperation,
+    AztecGetContractMetadataOperation,
+    AztecGetPrivateEventsOperation,
+    AztecProfileTxOperation,
     AztecRegisterContractOperation,
     AztecRegisterSenderOperation,
     AztecSendTxOperation,
@@ -15,16 +23,25 @@ import {
 import { CallIntent, IntentInnerHash } from "@aztec/aztec.js/authorization";
 import {
     Aliased,
+    AppCapabilities,
     BatchableMethods,
     BatchedMethod,
     BatchResults,
+    ContractClassMetadata,
+    ContractMetadata,
     PrivateEvent,
     PrivateEventFilter,
     ProfileOptions,
     SendOptions,
     SimulateOptions,
+    SimulateUtilityOptions,
+    WalletCapabilities,
     Wallet,
 } from "@aztec/aztec.js/wallet";
+import {
+    type InteractionWaitOptions,
+    type SendReturn,
+} from "@aztec/aztec.js/contracts";
 import { ChainInfo } from "@aztec/entrypoints/interfaces";
 import { Fr } from "@aztec/foundation/curves/bn254";
 import { ZodFor } from "@aztec/foundation/schemas";
@@ -32,15 +49,14 @@ import { ContractArtifact, EventMetadataDefinition, FunctionCall } from "@aztec/
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import { AuthWitness } from "@aztec/stdlib/auth-witness";
 import {
-    ContractClassMetadata,
     ContractInstanceWithAddress,
     ContractInstanceWithAddressSchema,
-    ContractMetadata,
 } from "@aztec/stdlib/contract";
 import { ExecutionPayload, TxSimulationResult, UtilitySimulationResult, TxHash, TxReceipt, TxProfileResult } from "@aztec/stdlib/tx";
 import z from "zod";
 import { ChainInfoSchema } from "@aztec/entrypoints/interfaces";
-import { AddressBookSchema, ContractClassMetadataSchema, ContractMetadataSchema } from "./schemas";
+import { ContractClassMetadataSchema, ContractMetadataSchema } from "@aztec/aztec.js/wallet";
+import { AccountsSchema, AddressBookSchema } from "./schemas";
 import { aztecMethods } from "./methods";
 
 /** Azguard Wallet client fully compatible with Aztec.js' `Wallet` interface */
@@ -58,7 +74,7 @@ export class AztecWallet implements Wallet {
         }
 
         if (!chain || chain === "devnet") {
-            chain = "aztec:1654394782";
+            chain = "aztec:604129785";
         } else if (chain === "sandbox") {
             chain = "aztec:0";
         }
@@ -133,11 +149,6 @@ export class AztecWallet implements Wallet {
         }
     }
 
-    async #account(): Promise<CaipAccount> {
-        await this.#ensureConnected();
-        return this.#azguard.accounts[0];
-    }
-
     async #execute<T>(schema: ZodFor<T>, operation: Operation): Promise<T> {
         await this.#ensureConnected();
         const [result] = await this.#azguard.execute([operation]);
@@ -150,12 +161,11 @@ export class AztecWallet implements Wallet {
         return await schema.parseAsync(result.result);
     }
 
-    public async getContractClassMetadata(id: Fr, includeArtifact?: boolean): Promise<ContractClassMetadata> {
+    public async getContractClassMetadata(id: Fr): Promise<ContractClassMetadata> {
         return await this.#execute(ContractClassMetadataSchema, {
             kind: "aztec_getContractClassMetadata",
             chain: this.#chain,
             id,
-            includeArtifact,
         });
     }
 
@@ -186,14 +196,6 @@ export class AztecWallet implements Wallet {
         });
     }
 
-    public async getTxReceipt(txHash: TxHash): Promise<TxReceipt> {
-        return await this.#execute(TxReceipt.schema, {
-            kind: "aztec_getTxReceipt",
-            chain: this.#chain,
-            txHash,
-        });
-    }
-
     public async registerSender(address: AztecAddress, alias?: string): Promise<AztecAddress> {
         return await this.#execute(AztecAddress.schema, {
             kind: "aztec_registerSender",
@@ -211,11 +213,10 @@ export class AztecWallet implements Wallet {
     }
 
     public async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-        await this.#ensureConnected();
-        return this.#azguard.accounts.map((x, i) => ({
-            alias: `Account ${i + 1}`,
-            item: AztecAddress.fromString(x.split(":").at(-1)!),
-        }));
+        return await this.#execute(AccountsSchema, {
+            kind: "aztec_getAccounts",
+            chain: this.#chain,
+        });
     }
 
     public async registerContract(
@@ -248,13 +249,18 @@ export class AztecWallet implements Wallet {
 
     public async simulateUtility(
         call: FunctionCall,
-        authwits?: AuthWitness[],
+        opts: SimulateUtilityOptions,
     ): Promise<UtilitySimulationResult> {
+        await this.#ensureConnected();
+        const account = this.#azguard.accounts.find((x) => x.endsWith(opts?.scope?.toString()));
+        if (!account) {
+            throw new Error("Unauthorized 'scope' account");
+        }
         return await this.#execute(UtilitySimulationResult.schema, {
             kind: "aztec_simulateUtility",
-            account: await this.#account(),
+            account,
             call,
-            authwits,
+            opts,
         });
     }
 
@@ -272,23 +278,27 @@ export class AztecWallet implements Wallet {
         });
     }
 
-    public async sendTx(exec: ExecutionPayload, opts: SendOptions): Promise<TxHash> {
+    public async sendTx<W extends InteractionWaitOptions = undefined>(
+        exec: ExecutionPayload,
+        opts: SendOptions<W>,
+    ): Promise<SendReturn<W>> {
         await this.#ensureConnected();
         const account = this.#azguard.accounts.find((x) => x.endsWith(opts?.from?.toString()));
         if (!account) {
             throw new Error("Unauthorized 'from' account");
         }
-        return await this.#execute(TxHash.schema, {
+        const schema = z.union([TxHash.schema, TxReceipt.schema]);
+        return await this.#execute(schema, {
             kind: "aztec_sendTx",
             account,
             exec,
             opts,
-        });
+        }) as SendReturn<W>;
     }
 
     public async createAuthWit(
         from: AztecAddress,
-        messageHashOrIntent: Fr | IntentInnerHash | CallIntent,
+        messageHashOrIntent: IntentInnerHash | CallIntent,
     ): Promise<AuthWitness> {
         await this.#ensureConnected();
         const account = this.#azguard.accounts.find((x) => x.endsWith(from?.toString()));
@@ -302,7 +312,12 @@ export class AztecWallet implements Wallet {
         });
     }
 
-    public async batch<const T extends readonly BatchedMethod<keyof BatchableMethods>[]>(
+    public async requestCapabilities(manifest: AppCapabilities): Promise<WalletCapabilities> {
+        // TODO: implement capability negotiation based on manifest
+        return {} as WalletCapabilities;
+    }
+
+    public async batch<const T extends readonly BatchedMethod[]>(
         methods: T,
     ): Promise<BatchResults<T>> {
         await this.#ensureConnected();
@@ -364,15 +379,100 @@ export class AztecWallet implements Wallet {
                     break;
                 }
                 case "simulateUtility": {
-                    const [call, authwits] = method.args as Parameters<BatchableMethods["simulateUtility"]>;
+                    const [call, opts] = method.args as Parameters<BatchableMethods["simulateUtility"]>;
+                    const account = this.#azguard.accounts.find((x) => x.endsWith(opts?.scope?.toString()));
+                    if (!account) {
+                        throw new Error("Unauthorized 'scope' account");
+                    }
                     operations.push({
                         kind: "aztec_simulateUtility",
-                        account: await this.#account(),
+                        account,
                         call,
-                        authwits,
+                        opts,
                     } satisfies AztecSimulateUtilityOperation);
                     break;
                 }
+                case "getChainInfo": {
+                    operations.push({
+                        kind: "aztec_getChainInfo",
+                        chain: this.#chain,
+                    } satisfies AztecGetChainInfoOperation);
+                    break;
+                }
+                case "getContractMetadata": {
+                    const [address] = method.args as Parameters<BatchableMethods["getContractMetadata"]>;
+                    operations.push({
+                        kind: "aztec_getContractMetadata",
+                        chain: this.#chain,
+                        address,
+                    } satisfies AztecGetContractMetadataOperation);
+                    break;
+                }
+                case "getContractClassMetadata": {
+                    const [id] = method.args as Parameters<BatchableMethods["getContractClassMetadata"]>;
+                    operations.push({
+                        kind: "aztec_getContractClassMetadata",
+                        chain: this.#chain,
+                        id,
+                    } satisfies AztecGetContractClassMetadataOperation);
+                    break;
+                }
+                case "getAddressBook": {
+                    operations.push({
+                        kind: "aztec_getAddressBook",
+                        chain: this.#chain,
+                    } satisfies AztecGetAddressBookOperation);
+                    break;
+                }
+                case "getAccounts": {
+                    operations.push({
+                        kind: "aztec_getAccounts",
+                        chain: this.#chain,
+                    } satisfies AztecGetAccountsOperation);
+                    break;
+                }
+                case "getPrivateEvents": {
+                    const [eventMetadata, eventFilter] = method.args as Parameters<BatchableMethods["getPrivateEvents"]>;
+                    operations.push({
+                        kind: "aztec_getPrivateEvents",
+                        chain: this.#chain,
+                        eventMetadata,
+                        eventFilter,
+                    } satisfies AztecGetPrivateEventsOperation);
+                    break;
+                }
+                case "profileTx": {
+                    const [exec, opts] = method.args as Parameters<BatchableMethods["profileTx"]>;
+                    const account = this.#azguard.accounts.find((x) =>
+                        x.endsWith(opts?.from?.toString()),
+                    );
+                    if (!account) {
+                        throw new Error("Unauthorized 'from' account");
+                    }
+                    operations.push({
+                        kind: "aztec_profileTx",
+                        account,
+                        exec,
+                        opts,
+                    } satisfies AztecProfileTxOperation);
+                    break;
+                }
+                case "createAuthWit": {
+                    const [from, messageHashOrIntent] = method.args as Parameters<BatchableMethods["createAuthWit"]>;
+                    const account = this.#azguard.accounts.find((x) =>
+                        x.endsWith(from?.toString()),
+                    );
+                    if (!account) {
+                        throw new Error("Unauthorized 'from' account");
+                    }
+                    operations.push({
+                        kind: "aztec_createAuthWit",
+                        account,
+                        messageHashOrIntent,
+                    } satisfies AztecCreateAuthWitOperation);
+                    break;
+                }
+                case "requestCapabilities":
                 default: {
                     throw new Error("Unsupported batch method");
                 }
@@ -394,39 +494,96 @@ export class AztecWallet implements Wallet {
             switch (method) {
                 case "registerContract": {
                     output.push({
-                        method,
+                        name: method,
                         result: await ContractInstanceWithAddressSchema.parseAsync(result.result),
                     });
                     break;
                 }
                 case "registerSender": {
                     output.push({
-                        method,
+                        name: method,
                         result: await AztecAddress.schema.parseAsync(result.result),
                     });
                     break;
                 }
                 case "sendTx": {
                     output.push({
-                        method,
-                        result: await TxHash.schema.parseAsync(result.result),
+                        name: method,
+                        result: await z.union([TxHash.schema, TxReceipt.schema]).parseAsync(result.result),
                     });
                     break;
                 }
                 case "simulateTx": {
                     output.push({
-                        method,
+                        name: method,
                         result: await TxSimulationResult.schema.parseAsync(result.result),
                     });
                     break;
                 }
                 case "simulateUtility": {
                     output.push({
-                        method,
+                        name: method,
                         result: await UtilitySimulationResult.schema.parseAsync(result.result),
                     });
                     break;
                 }
+                case "getChainInfo": {
+                    output.push({
+                        name: method,
+                        result: await ChainInfoSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getContractMetadata": {
+                    output.push({
+                        name: method,
+                        result: await ContractMetadataSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getContractClassMetadata": {
+                    output.push({
+                        name: method,
+                        result: await ContractClassMetadataSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getAddressBook": {
+                    output.push({
+                        name: method,
+                        result: await AddressBookSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getAccounts": {
+                    output.push({
+                        name: method,
+                        result: await AccountsSchema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "getPrivateEvents": {
+                    output.push({
+                        name: method,
+                        result: await z.any().parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "profileTx": {
+                    output.push({
+                        name: method,
+                        result: await TxProfileResult.schema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "createAuthWit": {
+                    output.push({
+                        name: method,
+                        result: await AuthWitness.schema.parseAsync(result.result),
+                    });
+                    break;
+                }
+                case "requestCapabilities":
                 default: {
                     throw new Error("Unsupported batch method");
                 }
