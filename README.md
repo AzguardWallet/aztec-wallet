@@ -30,7 +30,7 @@ const wallet = await AztecWallet.connect(
         logo: "...",
         url: "..."
     },
-    "devnet" // or "sandbox", or CAIP-string like "aztec:604129785"
+    "testnet" // or "sandbox", or CAIP-string like "aztec:4138294185"
 );
 ```
 
@@ -50,13 +50,13 @@ const tokenContract = TokenContract.at(tokenAddress, wallet);
 
 // register token contract in user's PXE
 
-const node = createAztecNodeClient("https://next.devnet.aztec-labs.com");
+const node = createAztecNodeClient("https://rpc.testnet.aztec-labs.com");
 const tokenInstance = await node.getContract(tokenAddress);
 await wallet.registerContract(tokenInstance, TokenContractArtifact);
 
 // get token private balance
 
-const prvBalance = await tokenContract.methods
+const { result: prvBalance } = await tokenContract.methods
     .balance_of_private(address)
     .simulate({from: address});
 
@@ -64,7 +64,7 @@ console.log("Private balance", prvBalance);
 
 // get token public balance
 
-const pubBalance = await tokenContract.methods
+const { result: pubBalance } = await tokenContract.methods
     .balance_of_public(address)
     .simulate({from: address});
 
@@ -78,11 +78,11 @@ const feeOptions = {
     ),
 };
 
-const txReceipt = await tokenContract.methods
+const { receipt } = await tokenContract.methods
     .transfer(AztecAddress.fromString("0x..."), 100000000n)
     .send({from: address, fee: feeOptions});
 
-console.log("Tx hash", txReceipt.txHash);
+console.log("Tx hash", receipt.txHash);
 ```
 
 That's pretty much it! See more Aztec.js examples at https://docs.aztec.network.
