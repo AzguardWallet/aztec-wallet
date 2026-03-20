@@ -10,7 +10,7 @@ export const aztecMethods: OperationKind[] = [
     "aztec_getAccounts",
     "aztec_registerContract",
     "aztec_simulateTx",
-    "aztec_simulateUtility",
+    "aztec_executeUtility",
     "aztec_profileTx",
     "aztec_sendTx",
     "aztec_createAuthWit",

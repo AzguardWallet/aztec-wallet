@@ -1,6 +1,6 @@
 {
     "name": "@azguardwallet/aztec-wallet",
-    "version": "4.0.0-devnet.2-patch.2",
+    "version": "4.1.0-rc.4",
     "description": "Azguard Wallet client fully compatible with Aztec.js' Wallet interface",
     "author": "Azguard Wallet",
     "homepage": "https://github.com/AzguardWallet/aztec-wallet",
@@ -22,12 +22,12 @@
         "build": "rm -rf dist && tsc"
     },
     "dependencies": {
-        "@azguardwallet/client": "0.8.0",
-        "@azguardwallet/types": "0.8.0",
-        "@aztec/aztec.js": "4.0.0-devnet.2-patch.2",
-        "@aztec/entrypoints": "4.0.0-devnet.2-patch.2",
-        "@aztec/foundation": "4.0.0-devnet.2-patch.2",
-        "@aztec/stdlib": "4.0.0-devnet.2-patch.2",
+        "@azguardwallet/client": "0.9.0",
+        "@azguardwallet/types": "0.9.0",
+        "@aztec/aztec.js": "4.1.0-rc.4",
+        "@aztec/entrypoints": "4.1.0-rc.4",
+        "@aztec/foundation": "4.1.0-rc.4",
+        "@aztec/stdlib": "4.1.0-rc.4",
         "zod": "^3.23.8"
     }
 }

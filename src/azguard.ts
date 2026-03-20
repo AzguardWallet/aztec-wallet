@@ -12,7 +12,7 @@ import {
     AztecRegisterSenderOperation,
     AztecSendTxOperation,
     AztecSimulateTxOperation,
-    AztecSimulateUtilityOperation,
+    AztecExecuteUtilityOperation,
     CaipAccount,
     CaipChain,
     DappMetadata,
@@ -34,7 +34,7 @@ import {
     ProfileOptions,
     SendOptions,
     SimulateOptions,
-    SimulateUtilityOptions,
+    ExecuteUtilityOptions,
     WalletCapabilities,
     Wallet,
 } from "@aztec/aztec.js/wallet";
@@ -52,29 +52,39 @@ import {
     ContractInstanceWithAddress,
     ContractInstanceWithAddressSchema,
 } from "@aztec/stdlib/contract";
-import { ExecutionPayload, TxSimulationResult, UtilitySimulationResult, TxHash, TxReceipt, TxProfileResult } from "@aztec/stdlib/tx";
+import { ExecutionPayload, TxSimulationResult, UtilityExecutionResult, TxHash, TxReceipt, TxProfileResult } from "@aztec/stdlib/tx";
 import z from "zod";
 import { ChainInfoSchema } from "@aztec/entrypoints/interfaces";
 import { ContractClassMetadataSchema, ContractMetadataSchema } from "@aztec/aztec.js/wallet";
 import { AccountsSchema, AddressBookSchema } from "./schemas";
 import { aztecMethods } from "./methods";
 
+const OffchainOutputSchema = z.object({
+    offchainEffects: z.array(z.object({ data: z.array(Fr.schema), contractAddress: AztecAddress.schema })),
+    offchainMessages: z.array(z.object({ recipient: AztecAddress.schema, payload: z.array(Fr.schema), contractAddress: AztecAddress.schema })),
+});
+
+const SendTxResultSchema = z.union([
+    z.object({ txHash: TxHash.schema }).merge(OffchainOutputSchema),
+    z.object({ receipt: TxReceipt.schema }).merge(OffchainOutputSchema),
+]);
+
 /** Azguard Wallet client fully compatible with Aztec.js' `Wallet` interface */
 export class AztecWallet implements Wallet {
     /**
      * Creates `AztecWallet` instance, connected to Azguard Wallet
      * @param dapp Dapp metadata (default: { name: window.location.hostname })
-     * @param chain Chain (default: "devnet")
+     * @param chain Chain (default: "testnet")
      * @param timeout Timeout in ms for the `window.azguard` object lookup (default: 1000ms)
      * @returns AztecWallet instance
      */
-    public static async connect(dapp?: DappMetadata, chain?: "devnet" | "sandbox" | CaipChain, timeout?: number) {
+    public static async connect(dapp?: DappMetadata, chain?: "testnet" | "sandbox" | CaipChain, timeout?: number) {
         if (!dapp?.name) {
             dapp = { ...dapp, name: window.location.hostname };
         }
 
-        if (!chain || chain === "devnet") {
-            chain = "aztec:604129785";
+        if (!chain || chain === "testnet") {
+            chain = "aztec:4138294185";
         } else if (chain === "sandbox") {
             chain = "aztec:0";
         }
@@ -247,17 +257,17 @@ export class AztecWallet implements Wallet {
         });
     }
 
-    public async simulateUtility(
+    public async executeUtility(
         call: FunctionCall,
-        opts: SimulateUtilityOptions,
-    ): Promise<UtilitySimulationResult> {
+        opts: ExecuteUtilityOptions,
+    ): Promise<UtilityExecutionResult> {
         await this.#ensureConnected();
         const account = this.#azguard.accounts.find((x) => x.endsWith(opts?.scope?.toString()));
         if (!account) {
             throw new Error("Unauthorized 'scope' account");
         }
-        return await this.#execute(UtilitySimulationResult.schema, {
-            kind: "aztec_simulateUtility",
+        return await this.#execute(UtilityExecutionResult.schema, {
+            kind: "aztec_executeUtility",
             account,
             call,
             opts,
@@ -287,8 +297,7 @@ export class AztecWallet implements Wallet {
         if (!account) {
             throw new Error("Unauthorized 'from' account");
         }
-        const schema = z.union([TxHash.schema, TxReceipt.schema]);
-        return await this.#execute(schema, {
+        return await this.#execute(SendTxResultSchema, {
             kind: "aztec_sendTx",
             account,
             exec,
@@ -349,8 +358,8 @@ export class AztecWallet implements Wallet {
                 case "sendTx": {
                     const [exec, opts] = method.args as Parameters<BatchableMethods["sendTx"]>;
                     const account = this.#azguard.accounts.find((x) =>
-                        x.endsWith(opts?.from?.toString()),
-                    );
+                            x.endsWith(opts?.from?.toString()),
+                        );
                     if (!account) {
                         throw new Error("Unauthorized 'from' account");
                     }
@@ -365,8 +374,8 @@ export class AztecWallet implements Wallet {
                 case "simulateTx": {
                     const [exec, opts] = method.args as Parameters<BatchableMethods["simulateTx"]>;
                     const account = this.#azguard.accounts.find((x) =>
-                        x.endsWith(opts?.from?.toString()),
-                    );
+                            x.endsWith(opts?.from?.toString()),
+                        );
                     if (!account) {
                         throw new Error("Unauthorized 'from' account");
                     }
@@ -378,18 +387,18 @@ export class AztecWallet implements Wallet {
                     } satisfies AztecSimulateTxOperation);
                     break;
                 }
-                case "simulateUtility": {
-                    const [call, opts] = method.args as Parameters<BatchableMethods["simulateUtility"]>;
+                case "executeUtility": {
+                    const [call, opts] = method.args as Parameters<BatchableMethods["executeUtility"]>;
                     const account = this.#azguard.accounts.find((x) => x.endsWith(opts?.scope?.toString()));
                     if (!account) {
                         throw new Error("Unauthorized 'scope' account");
                     }
                     operations.push({
-                        kind: "aztec_simulateUtility",
+                        kind: "aztec_executeUtility",
                         account,
                         call,
                         opts,
-                    } satisfies AztecSimulateUtilityOperation);
+                    } satisfies AztecExecuteUtilityOperation);
                     break;
                 }
                 case "getChainInfo": {
@@ -444,8 +453,8 @@ export class AztecWallet implements Wallet {
                 case "profileTx": {
                     const [exec, opts] = method.args as Parameters<BatchableMethods["profileTx"]>;
                     const account = this.#azguard.accounts.find((x) =>
-                        x.endsWith(opts?.from?.toString()),
-                    );
+                            x.endsWith(opts?.from?.toString()),
+                        );
                     if (!account) {
                         throw new Error("Unauthorized 'from' account");
                     }
@@ -509,7 +518,7 @@ export class AztecWallet implements Wallet {
                 case "sendTx": {
                     output.push({
                         name: method,
-                        result: await z.union([TxHash.schema, TxReceipt.schema]).parseAsync(result.result),
+                        result: await SendTxResultSchema.parseAsync(result.result),
                     });
                     break;
                 }
@@ -520,10 +529,10 @@ export class AztecWallet implements Wallet {
                     });
                     break;
                 }
-                case "simulateUtility": {
+                case "executeUtility": {
                     output.push({
                         name: method,
-                        result: await UtilitySimulationResult.schema.parseAsync(result.result),
+                        result: await UtilityExecutionResult.schema.parseAsync(result.result),
                     });
                     break;
                 }
